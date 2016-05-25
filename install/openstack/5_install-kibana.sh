@@ -28,3 +28,14 @@ sudo systemctl enable kibana.service
 sudo systemctl status kibana.service
 
 sudo chown -R kibana:root /opt/kibana
+
+sudo openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key.pem -out cert.pem -subj "/C=UK/ST=England/L=London/O=RHC OS1/OU=Consulting/CN=elastic-postman"
+sudo mv *.pem /opt/kibana/config/
+sudo chown kibana:root /opt/kibana/config/*.pem
+
+sudo bash -c "cat >> /opt/kibana/config/kibana.yml <<EOT
+server.ssl.cert: /opt/kibana/config/cert.pem
+server.ssl.key: /opt/kibana/config/key.pem
+EOT"
+
+
