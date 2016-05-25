@@ -38,7 +38,9 @@ If you want to run it locally, you can via:
 - mvn camel:run
 
 ## Future TODO
+- Update "idempotentConsumer" to be postgres aware
+- Set ElasticSearch IndexType to the mailling list name
 - Dockerize Kibana (https://hub.docker.com/_/kibana/)
 - Externalise ElasticSearch and Dockerize
-- Set IndexType to the mailling list name
 - Allow for main URL (i.e.: postman.blah.com) to be passed in by caller
+- Make the install Ansiblised

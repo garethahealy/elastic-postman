@@ -8,7 +8,7 @@ WHITE="\e[0m"
 
 echo -e $GREEN"Configing Kibana for YUM install"$WHITE
 
-sudo rpm --import https://packages.elastic.co/D88E42B4-elasticsearch
+sudo rpm --import https://packages.elastic.co/GPG-KEY-elasticsearch
 
 sudo bash -c "cat >> /etc/yum.repos.d/kibana.repo <<EOT
 [kibana-4.5]
@@ -25,7 +25,6 @@ sudo yum install -y kibana
 
 sudo systemctl daemon-reload
 sudo systemctl enable kibana.service
-sudo systemctl start kibana.service
 sudo systemctl status kibana.service
 
-netstat -an | grep 5601
+sudo chown -R kibana:root /opt/kibana

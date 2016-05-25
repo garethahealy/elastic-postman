@@ -19,5 +19,5 @@ EOT
 source ~/.bash_profile
 
 echo -e $GREEN"JAVA_HOME == $JAVA_HOME"$WHITE
-echo -e $GREEN"echo $(java -version)"$WHITE
-echo -e $GREEN"echo $(javac -version)"$WHITE
+echo -e $GREEN"$(java -version)"$WHITE
+echo -e $GREEN"$(javac -version)"$WHITE

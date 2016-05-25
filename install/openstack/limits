@@ -1,0 +1,4 @@
+sudo vi /etc/security/limits.conf
+
+cloud-user soft nofile 4096
+cloud-user hard nofile 65536

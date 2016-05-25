@@ -36,6 +36,7 @@
     <bean id="elementAttributeHrefProcessor" class="com.garethahealy.elasticpostman.scraper.processors.ElementAttributeHrefProcessor"/>
     <bean id="removeAllHeadersExceptCamelHttpUriProcessor" class="com.garethahealy.elasticpostman.scraper.processors.RemoveAllHeadersExceptCamelHttpUriProcessor"/>
     <bean id="regExSplitProcessor" class="com.garethahealy.elasticpostman.scraper.processors.RegExSplitProcessor"/>
+    <bean id="mapListAggregationStrategy" class="com.garethahealy.elasticpostman.scraper.aggregators.MapListAggregationStrategy"/>
 
     <bean id="elasticSearchClientFactory" class="com.garethahealy.elasticpostman.scraper.ElasticSearchClientFactory">
         <constructor-arg value="${ES_HOME_PATH}"/>
@@ -73,7 +74,7 @@
                 <simple>archive-${date:now:yyyyMMdd-HHmmssSSS}.html</simple>
             </setHeader>
             <log loggingLevel="INFO" message="Writting archive page file to; ${header.CamelFileName}"/>
-            <to uri="file://{{ROOT_SCRAPER_DATA}}/archivehtml?tempPrefix=.writting/&amp;charset=utf-8"/>
+            <to uri="file://{{ROOT_SCRAPER_DATA}}/archive_html?tempPrefix=.writting/&amp;charset=utf-8"/>
         </route>
 
         <route id="writeArchiveHtmlMetaUrl">
@@ -85,11 +86,11 @@
                 <simple>${header.CamelHttpUri}</simple>
             </setBody>
             <log loggingLevel="INFO" message="Writing archive meta url file to; ${header.CamelFileName}"/>
-            <to uri="file://{{ROOT_SCRAPER_DATA}}/archivehtml?tempPrefix=.writting/&amp;charset=utf-8"/>
+            <to uri="file://{{ROOT_SCRAPER_DATA}}/archive_html?tempPrefix=.writting/&amp;charset=utf-8"/>
         </route>
 
         <route id="parseArchivePage" streamCache="true" autoStartup="true">
-            <from uri="file://{{ROOT_SCRAPER_DATA}}/archivehtml?initialDelay=1s&amp;delay=5s&amp;readLock=fileLock&amp;include=.*\.html"/>
+            <from uri="file://{{ROOT_SCRAPER_DATA}}/archive_html?initialDelay=1s&amp;delay=5s&amp;readLock=fileLock&amp;include=.*\.html"/>
             <log loggingLevel="INFO" message="Found ${header.CamelFileName} - will parse"/>
             <process ref="jSoupParserProcessor"/>
             <process ref="jSoupBodySelectorProcessor"/>
@@ -97,7 +98,7 @@
                 <simple>${header.CamelFileName}.metaurl</simple>
             </setHeader>
             <pollEnrich timeout="5000">
-                <simple>file://{{ROOT_SCRAPER_DATA}}/archivehtml?readLock=fileLock</simple>
+                <simple>file://{{ROOT_SCRAPER_DATA}}/archive_html?readLock=fileLock</simple>
             </pollEnrich>
             <setHeader headerName="MetaUrl">
                 <simple>${body}</simple>
@@ -117,25 +118,29 @@
             <setHeader headerName="CamelHttpUri">
                 <simple>${header.MetaUrl}/${body}</simple>
             </setHeader>
+            <setHeader headerName="CamelFileName">
+                <simple>mime-${date:now:yyyyMMdd-HHmmssSSS}-${body}.txt</simple>
+            </setHeader>
             <process ref="removeAllHeadersExceptCamelHttpUriProcessor"/>
             <throttle timePeriodMillis="1000" >
                 <constant>1</constant>
                 <log loggingLevel="INFO" message="Attempting to download zip; ${header.CamelHttpUri}"/>
                 <to uri="jetty:http://the-mailman.com"/>
-                <to uri="seda:unzip"/>
+                <to uri="direct:unzip"/>
             </throttle>
         </route>
 
         <route id="unzip" autoStartup="true">
-            <from uri="seda:unzip?concurrentConsumers=8"/>
+            <from uri="direct:unzip"/>
             <unmarshal>
                 <gzip/>
             </unmarshal>
-            <to uri="direct:elasticsearchLoad"/>
+            <to uri="file://{{ROOT_SCRAPER_DATA}}/mime_content?tempPrefix=.writting/"/>
         </route>
 
         <route id="elasticsearchLoad" autoStartup="true">
-            <from uri="direct:elasticsearchLoad"/>
+            <from uri="file://{{ROOT_SCRAPER_DATA}}/mime_content?initialDelay=1s&amp;delay=5s&amp;readLock=fileLock&amp;include=.*\.txt"/>
+            <log loggingLevel="INFO" message="Parsing; ${header.CamelFileName}"/>
             <bean ref="regExSplitProcessor" method="process"/>
             <split>
                 <simple>${body}</simple>
@@ -145,7 +150,12 @@
                         <simple>${body.toMap()}</simple>
                     </setBody>
                     <log loggingLevel="DEBUG" message="Will store the following MAP in elastic: ${body}"/>
-                    <to uri="elasticsearch://local?operation=INDEX&amp;indexName=postman&amp;indexType=mail"/>
+                    <aggregate strategyRef="mapListAggregationStrategy" completionSize="100" completionTimeout="5000">
+                        <correlationExpression>
+                            <simple>${header.CamelFileName}</simple>
+                        </correlationExpression>
+                        <to uri="elasticsearch://local?operation=BULK_INDEX&amp;indexName=postman&amp;indexType=mail"/>
+                    </aggregate>
                 </idempotentConsumer>
             </split>
         </route>

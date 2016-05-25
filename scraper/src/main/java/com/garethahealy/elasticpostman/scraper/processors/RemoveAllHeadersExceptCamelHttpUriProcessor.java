@@ -31,9 +31,11 @@ public class RemoveAllHeadersExceptCamelHttpUriProcessor implements Processor {
     @Override
     public void process(Exchange exchange) throws Exception {
         String camelHttpUri = exchange.getIn().getHeader(Exchange.HTTP_URI, String.class);
+        String camelFileName = exchange.getIn().getHeader(Exchange.FILE_NAME, String.class);
 
         exchange.getProperties().clear();
         exchange.getIn().getHeaders().clear();
+        exchange.getIn().setHeader(Exchange.FILE_NAME, camelFileName);
         exchange.getIn().setHeader(Exchange.HTTP_URI, new URL(camelHttpUri).toString());
         exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
     }
