@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  #%L
+  GarethHealy :: Elastic Postman :: Scraper
+  %%
+  Copyright (C) 2013 - 2016 Gareth Healy
+  %%
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+  
+       http://www.apache.org/licenses/LICENSE-2.0
+  
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  #L%
+  -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+           http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+           http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+
+    <bean id="bridgePropertyPlaceholder" class="org.apache.camel.spring.spi.BridgePropertyPlaceholderConfigurer" >
+        <property name="location" value="classpath:com/garethahealy/elasticpostman/scraper/scraper.properties"/>
+        <property name="searchSystemEnvironment" value="true"/>
+        <property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_OVERRIDE"/>
+    </bean>
+
+    <bean id="camelHttpUriHeaderProcessor" class="com.garethahealy.elasticpostman.scraper.processors.CamelHttpUriHeaderProcessor"/>
+    <bean id="jSoupParserProcessor" class="com.garethahealy.elasticpostman.scraper.processors.JSoupParserProcessor"/>
+    <bean id="jSoupBodySelectorProcessor" class="com.garethahealy.elasticpostman.scraper.processors.JSoupBodySelectorProcessor"/>
+    <bean id="elementAttributeHrefProcessor" class="com.garethahealy.elasticpostman.scraper.processors.ElementAttributeHrefProcessor"/>
+    <bean id="removeAllHeadersExceptCamelHttpUriProcessor" class="com.garethahealy.elasticpostman.scraper.processors.RemoveAllHeadersExceptCamelHttpUriProcessor"/>
+    <bean id="regExSplitProcessor" class="com.garethahealy.elasticpostman.scraper.processors.RegExSplitProcessor"/>
+
+    <bean id="elasticSearchClientFactory" class="com.garethahealy.elasticpostman.scraper.ElasticSearchClientFactory">
+        <constructor-arg value="${ES_HOME_PATH}"/>
+    </bean>
+    <bean id="esClient" class="org.elasticsearch.client.Client" factory-bean="elasticSearchClientFactory" factory-method="getObject"/>
+
+    <bean id="elasticsearch" class="org.apache.camel.component.elasticsearch.ElasticsearchComponent">
+        <constructor-arg ref="elastic-postman-scraper"/>
+        <property name="client" ref="esClient"/>
+    </bean>
+    
+    <bean id="memoryIdempotentRepository" class="org.apache.camel.processor.idempotent.MemoryIdempotentRepository"/>
+
+    <camelContext id="elastic-postman-scraper" xmlns="http://camel.apache.org/schema/spring">
+
+        <route id="downloadArchivePage" streamCache="true">
+            <from uri="jetty:http://0.0.0.0:9001/elasticpostman"/>
+            <process ref="camelHttpUriHeaderProcessor"/>
+            <log loggingLevel="INFO" message="Attempting to download archives page for; ${header.CamelHttpUri}"/>
+            <to uri="jetty:http://the-mailman.com"/>
+            <to uri="direct:writeArchiveHtml"/>
+            <to uri="direct:writeArchiveHtmlMetaUrl"/>
+            <setBody>
+                <simple>Downloaded ${header.CamelHttpUri} - will attempt to parse. Please wait 5mins before checking kibana</simple>
+            </setBody>
+            <removeHeaders pattern="*"/>
+            <setHeader headerName="Content-Type">
+                <constant>text/plain</constant>
+            </setHeader>
+        </route>
+
+        <route id="writeArchiveHtml">
+            <from uri="direct:writeArchiveHtml"/>
+            <setHeader headerName="CamelFileName">
+                <simple>archive-${date:now:yyyyMMdd-HHmmssSSS}.html</simple>
+            </setHeader>
+            <log loggingLevel="INFO" message="Writting archive page file to; ${header.CamelFileName}"/>
+            <to uri="file://{{ROOT_SCRAPER_DATA}}/archivehtml?tempPrefix=.writting/&amp;charset=utf-8"/>
+        </route>
+
+        <route id="writeArchiveHtmlMetaUrl">
+            <from uri="direct:writeArchiveHtmlMetaUrl"/>
+            <setHeader headerName="CamelFileName">
+                <simple>${file:name}.metaurl</simple>
+            </setHeader>
+            <setBody>
+                <simple>${header.CamelHttpUri}</simple>
+            </setBody>
+            <log loggingLevel="INFO" message="Writing archive meta url file to; ${header.CamelFileName}"/>
+            <to uri="file://{{ROOT_SCRAPER_DATA}}/archivehtml?tempPrefix=.writting/&amp;charset=utf-8"/>
+        </route>
+
+        <route id="parseArchivePage" streamCache="true" autoStartup="true">
+            <from uri="file://{{ROOT_SCRAPER_DATA}}/archivehtml?initialDelay=1s&amp;delay=5s&amp;readLock=fileLock&amp;include=.*\.html"/>
+            <log loggingLevel="INFO" message="Found ${header.CamelFileName} - will parse"/>
+            <process ref="jSoupParserProcessor"/>
+            <process ref="jSoupBodySelectorProcessor"/>
+            <setHeader headerName="CamelFileName">
+                <simple>${header.CamelFileName}.metaurl</simple>
+            </setHeader>
+            <pollEnrich timeout="5000">
+                <simple>file://{{ROOT_SCRAPER_DATA}}/archivehtml?readLock=fileLock</simple>
+            </pollEnrich>
+            <setHeader headerName="MetaUrl">
+                <simple>${body}</simple>
+            </setHeader>
+            <setBody>
+                <simple>${property.ArchiveHtmlTable}</simple>
+            </setBody>
+            <split>
+                <xpath saxon="true">/tbody/tr/td[3]/a</xpath>
+                <process ref="elementAttributeHrefProcessor"/>
+                <to uri="direct:downloadAllZip"/>
+            </split>
+        </route>
+
+        <route id="downloadAllZips" autoStartup="true">
+            <from uri="direct:downloadAllZip"/>
+            <setHeader headerName="CamelHttpUri">
+                <simple>${header.MetaUrl}/${body}</simple>
+            </setHeader>
+            <process ref="removeAllHeadersExceptCamelHttpUriProcessor"/>
+            <throttle timePeriodMillis="1000" >
+                <constant>1</constant>
+                <log loggingLevel="INFO" message="Attempting to download zip; ${header.CamelHttpUri}"/>
+                <to uri="jetty:http://the-mailman.com"/>
+                <to uri="seda:unzip"/>
+            </throttle>
+        </route>
+
+        <route id="unzip" autoStartup="true">
+            <from uri="seda:unzip?concurrentConsumers=8"/>
+            <unmarshal>
+                <gzip/>
+            </unmarshal>
+            <to uri="direct:elasticsearchLoad"/>
+        </route>
+
+        <route id="elasticsearchLoad" autoStartup="true">
+            <from uri="direct:elasticsearchLoad"/>
+            <bean ref="regExSplitProcessor" method="process"/>
+            <split>
+                <simple>${body}</simple>
+                <idempotentConsumer messageIdRepositoryRef="memoryIdempotentRepository">
+                    <simple>${body.gethashCode()}</simple>
+                    <setBody>
+                        <simple>${body.toMap()}</simple>
+                    </setBody>
+                    <log loggingLevel="DEBUG" message="Will store the following MAP in elastic: ${body}"/>
+                    <to uri="elasticsearch://local?operation=INDEX&amp;indexName=postman&amp;indexType=mail"/>
+                </idempotentConsumer>
+            </split>
+        </route>
+
+    </camelContext>
+
+</beans>

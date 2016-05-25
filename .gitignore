@@ -1,0 +1,34 @@
+# IntelliJ IDEA #
+.idea/
+*.iml
+
+# Eclipse Files #
+.metadata
+.settings
+.project
+.classpath
+RemoteSystemsTempFiles
+
+# General Java Folders #
+bin/
+target/
+logs/
+
+# Java Package Files #
+*.jar
+*.class
+
+# General #
+tmp/
+*.tmp
+
+# Vagrant
+.vagrant
+*.box
+*.vmdk
+*.ova
+
+elastic/
+
+kibana/kibana-4.5.1-darwin-x64
+kibana/kibana-4.5.1-darwin-x64.tar.gz
