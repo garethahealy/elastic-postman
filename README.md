@@ -39,6 +39,7 @@ If you want to run it locally, you can via:
 
 ## Future TODO
 - Add ability to download only the last zip
+- Slurp all mailing lists which are archive based
 - Update "idempotentConsumer" to be postgres aware
 - Set ElasticSearch IndexType to the mailling list name
 - Dockerize Kibana (https://hub.docker.com/_/kibana/)

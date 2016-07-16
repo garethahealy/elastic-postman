@@ -37,7 +37,7 @@ sudo bash -c "cat >> /etc/systemd/system/elastic-postman.service.d/local.conf <<
 [Service]
 Environment="ROOT_SCRAPER_DATA=/deployments/data"
 Environment="ES_HOME_PATH=/deployments/elastic"
-Environment="JAVA_OPTIONS='-server -Xms1GB -Xmx1GB -XX:+UnlockDiagnosticVMOptions -XX:+UnsyncloadClass'"
+Environment="JAVA_OPTIONS='-server -Xms1024m -Xmx1024m -XX:+UnlockDiagnosticVMOptions -XX:+UnsyncloadClass'"
 EOT"
 
 sudo systemctl daemon-reload
