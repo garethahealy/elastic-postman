@@ -19,9 +19,12 @@
  */
 package com.garethahealy.elasticpostman.scraper.entities;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -30,7 +33,9 @@ import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
 
 import com.garethahealy.elasticpostman.scraper.processors.RegExSplitProcessor;
+import com.google.common.collect.Iterators;
 
+import org.apache.commons.collections4.iterators.EnumerationIterator;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -70,7 +75,10 @@ public class EmailContent {
         this.sentDate = new DateTime(parsed.getMimeMessage().getSentDate());
         this.headers = new HashMap<String, String>();
 
-        for (Object current : Collections.list(parsed.getMimeMessage().getAllHeaders())) {
+        @SuppressWarnings("unchecked")
+        EnumerationIterator it = new EnumerationIterator(parsed.getMimeMessage().getAllHeaders());
+        while (it.hasNext()) {
+            Object current = it.next();
             if (current instanceof Header) {
                 Header header = (Header)current;
                 if (includeHeader(header.getName())) {
