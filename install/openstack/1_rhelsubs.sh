@@ -22,5 +22,3 @@ echo -e $GREEN"Trying PoolID: $POOL_ID"$WHITE
 sudo subscription-manager attach --pool=$POOL_ID
 
 sudo yum repolist
-
-
