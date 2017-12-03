@@ -6,7 +6,7 @@
     <parent>
         <groupId>com.garethahealy.elastic-postman</groupId>
         <artifactId>elastic-postman-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
         <relativePath>../</relativePath>
     </parent>
     <artifactId>deployer</artifactId>
@@ -17,7 +17,7 @@
         <dependency>
             <groupId>com.garethahealy.elastic-postman</groupId>
             <artifactId>scraper</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>1.0.0</version>
         </dependency>
     </dependencies>
 
